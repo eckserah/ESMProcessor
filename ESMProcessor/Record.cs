@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.IO;
+using ESMProcessor.Extensions;
 
 namespace ESMProcessor
 {
@@ -19,7 +20,7 @@ namespace ESMProcessor
         public ushort Length;
         public RecordField(BinaryReader reader)
         {
-            Signature = new string(reader.ReadChars(4));
+            Signature = reader.ReadSignature();
             Length = reader.ReadUInt16();
         }
     }
@@ -33,9 +34,9 @@ namespace ESMProcessor
         public ushort VersionControlVersion;
         public byte[] Data;
 
-        public TESForm(string signature, BinaryReader reader)
+        public TESForm(string signature, BinaryReader reader, long baseOffset = 0)
         {
-            Offset = reader.BaseStream.Position - 4;
+            Offset = baseOffset + reader.BaseStream.Position - 4;
             Signature = signature;
             Length = reader.ReadUInt32();
             Flags = reader.ReadUInt32();
@@ -163,11 +164,12 @@ namespace ESMProcessor
         public ushort VersionControlInfo;
         public FormID UnknownVal;
         public byte[] Data;
-        BaseFormComponent[] Records;
+        List<BaseFormComponent> Records;
+        long CurrentOffset;
 
-        public RecordGroup(string signature, BinaryReader reader)
+        public RecordGroup(string signature, BinaryReader reader, long baseOffset = 0)
         {
-            Offset = reader.BaseStream.Position - 4;
+            Offset = baseOffset + reader.BaseStream.Position - 4;
             Signature = signature;
             Length = reader.ReadUInt32();
             Label = reader.ReadBytes(4);
@@ -199,12 +201,35 @@ namespace ESMProcessor
             }
             TimeStamp = reader.ReadUInt16();
             VersionControlInfo = reader.ReadUInt16();
-            Data = reader.ReadBytes((int)Length);
-            ProcessGrupRecords();
+            UnknownVal = reader.ReadUInt32();
+            CurrentOffset = Offset + 24;
+            Data = reader.ReadBytes((int)Length - 24);
+            Records = new List<BaseFormComponent>();
         }
-        public void ProcessGrupRecords()
+        public void ProcessGrupRecords(List<string> resourceIDList, Dictionary<FormID, BaseFormComponent> formsList)
         {
-
+            using (MemoryStream ms = new MemoryStream(Data))
+            {
+                using (BinaryReader br = new BinaryReader(ms))
+                {
+                    while (br.BaseStream.Position != br.BaseStream.Length)
+                    {
+                        string Sig = br.ReadSignature();
+                        if (Sig == "GRUP")
+                        {
+                            RecordGroup subGroup = new RecordGroup(Sig, br, CurrentOffset);
+                            subGroup.ProcessGrupRecords(resourceIDList, formsList);
+                        }
+                        else
+                        {
+                            TESForm form = new TESForm(Sig, br, CurrentOffset);
+                            formsList.Add(form.FormID, form);
+                            resourceIDList.Add(form.Offset.ToString() + ',' + form.FormID.ToString());
+                            Records.Add(form);
+                        }
+                    }
+                }
+            }
         }
     }
 }

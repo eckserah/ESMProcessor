@@ -45,6 +45,7 @@
   <ItemGroup>
     <Compile Include="EnumDescription.cs" />
     <Compile Include="CustomTypes.cs" />
+    <Compile Include="Extensions\BinaryReaderExtension.cs" />
     <Compile Include="FormTypes.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
